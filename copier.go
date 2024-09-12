@@ -624,8 +624,20 @@ func set(to, from reflect.Value, deepCopy bool, converters map[converterPair]Typ
 
 	// try convert directly
 	if from.Type().ConvertibleTo(to.Type()) {
-		to.Set(from.Convert(to.Type()))
+		if isString(from) && isNumber(to) {
+			setStringToNumber(from, to)
+		} else if isNumber(from) && isString(to) {
+			setNumberToString(from, to)
+		} else {
+			to.Set(from.Convert(to.Type()))
+		}
 		return true, nil
+	} else {
+		if isString(from) && isFloat(to) {
+			setStringToNumber(from, to)
+		} else if isFloat(from) && isString(to) {
+			setNumberToString(from, to)
+		}
 	}
 
 	// try Scanner
@@ -860,4 +872,56 @@ func fieldByName(v reflect.Value, name string, caseSensitive bool) reflect.Value
 	}
 
 	return v.FieldByNameFunc(func(n string) bool { return strings.EqualFold(n, name) })
+}
+
+func isNumber(val reflect.Value) bool {
+	switch val.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return true
+	}
+	return false
+}
+
+func isInteger(val reflect.Value) bool {
+	switch val.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return true
+	}
+	return false
+}
+
+func isFloat(val reflect.Value) bool {
+	switch val.Kind() {
+	case reflect.Float32, reflect.Float64:
+		return true
+	}
+	return false
+}
+
+func isString(val reflect.Value) bool {
+	switch val.Kind() {
+	case reflect.String:
+		return true
+	}
+	return false
+}
+
+func setNumberToString(from, to reflect.Value) {
+	val := fmt.Sprintf("%v", from.Interface())
+	to.SetString(val)
+}
+
+func setStringToNumber(from, to reflect.Value) {
+	if isInteger(to) {
+		val := fmt.Sprintf("%v", from.Interface())
+		val64, _ := strconv.ParseUint(val, 10, 64)
+		to.SetInt(int64(val64))
+	} else if isFloat(to) {
+		val := fmt.Sprintf("%v", from.Interface())
+		val64, _ := strconv.ParseFloat(val, 64)
+		to.SetFloat(val64)
+	}
 }
