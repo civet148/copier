@@ -634,10 +634,12 @@ func set(to, from reflect.Value, deepCopy bool, converters map[converterPair]Typ
 		}
 		return true, nil
 	} else {
-		if isString(from) && isFloat(to) {
+		if isString(from) && isNumber(to) {
 			setStringToNumber(from, to)
-		} else if isFloat(from) && isString(to) {
+		} else if isNumber(from) && isString(to) {
 			setNumberToString(from, to)
+		} else {
+			fmt.Printf("from type %v can't convert to type %v \n", from.Type(), to.Type())
 		}
 	}
 
@@ -919,10 +921,25 @@ func setStringToNumber(from, to reflect.Value) {
 	if isInteger(to) {
 		val := fmt.Sprintf("%v", from.Interface())
 		val64, _ := strconv.ParseUint(val, 10, 64)
-		to.SetInt(int64(val64))
+
+		switch to.Kind() {
+		case reflect.Int,
+			reflect.Int8,
+			reflect.Int16,
+			reflect.Int32,
+			reflect.Int64,
+			reflect.Uint,
+			reflect.Uint8,
+			reflect.Uint16,
+			reflect.Uint32:
+			to.SetInt(int64(val64))
+		case reflect.Uint64:
+			to.Set(reflect.ValueOf(val64))
+		}
 	} else if isFloat(to) {
 		val := fmt.Sprintf("%v", from.Interface())
 		val64, _ := strconv.ParseFloat(val, 64)
 		to.SetFloat(val64)
 	}
 }
+
