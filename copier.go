@@ -638,9 +638,7 @@ func set(to, from reflect.Value, deepCopy bool, converters map[converterPair]Typ
 			setStringToNumber(from, to)
 		} else if isNumber(from) && isString(to) {
 			setNumberToString(from, to)
-		} else {
-			fmt.Printf("from type %v can't convert to type %v \n", from.Type(), to.Type())
-		}
+		} 
 	}
 
 	// try Scanner
