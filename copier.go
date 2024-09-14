@@ -918,26 +918,17 @@ func setNumberToString(from, to reflect.Value) {
 }
 
 func setStringToNumber(from, to reflect.Value) {
+	val := fmt.Sprintf("%v", from.Interface())
 	if isInteger(to) {
-		val := fmt.Sprintf("%v", from.Interface())
-		val64, _ := strconv.ParseUint(val, 10, 64)
-
+		valInt64, _ := strconv.ParseInt(val, 10, 64)
+		valUint64, _ := strconv.ParseUint(val, 10, 64)
 		switch to.Kind() {
-		case reflect.Int,
-			reflect.Int8,
-			reflect.Int16,
-			reflect.Int32,
-			reflect.Int64,
-			reflect.Uint,
-			reflect.Uint8,
-			reflect.Uint16,
-			reflect.Uint32:
-			to.SetInt(int64(val64))
-		case reflect.Uint64:
-			to.Set(reflect.ValueOf(val64))
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			to.SetInt(valInt64)
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			to.SetUint(valUint64)
 		}
 	} else if isFloat(to) {
-		val := fmt.Sprintf("%v", from.Interface())
 		val64, _ := strconv.ParseFloat(val, 64)
 		to.SetFloat(val64)
 	}
