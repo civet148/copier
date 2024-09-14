@@ -219,11 +219,12 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 		if from.IsNil() && to.IsNil() {
 			return
 		}
-		if to.IsNil() {
-			slice := reflect.MakeSlice(reflect.SliceOf(to.Type().Elem()), from.Len(), from.Cap())
-			to.Set(slice)
-		}
+
 		if fromType.ConvertibleTo(toType) {
+			if to.IsNil() {
+				slice := reflect.MakeSlice(reflect.SliceOf(to.Type().Elem()), from.Len(), from.Cap())
+				to.Set(slice)
+			}
 			for i := 0; i < from.Len(); i++ {
 				if to.Len() < i+1 {
 					to.Set(reflect.Append(to, reflect.New(to.Type().Elem()).Elem()))
@@ -246,6 +247,11 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 			}
 
 			return
+		} else {
+			ok, _ := copyBaseSlice(from, to)
+			if ok {
+				return
+			}
 		}
 	}
 
@@ -626,19 +632,24 @@ func set(to, from reflect.Value, deepCopy bool, converters map[converterPair]Typ
 	// try convert directly
 	if from.Type().ConvertibleTo(to.Type()) {
 		if isString(from) && isNumber(to) {
-			setStringToNumber(from, to)
+			return setStringToNumber(from, to)
 		} else if isNumber(from) && isString(to) {
-			setNumberToString(from, to)
+			return setNumberToString(from, to)
 		} else {
 			to.Set(from.Convert(to.Type()))
 		}
 		return true, nil
 	} else {
 		if isString(from) && isNumber(to) {
-			setStringToNumber(from, to)
+			return setStringToNumber(from, to)
 		} else if isNumber(from) && isString(to) {
-			setNumberToString(from, to)
-		} 
+			return setNumberToString(from, to)
+		} else {
+			ok, _ := copyBaseSlice(from, to)
+			if ok {
+				return true, nil
+			}
+		}
 	}
 
 	// try Scanner
@@ -910,12 +921,27 @@ func isString(val reflect.Value) bool {
 	return false
 }
 
-func setNumberToString(from, to reflect.Value) {
-	val := fmt.Sprintf("%v", from.Interface())
-	to.SetString(val)
+func isStringOrIntSlice(val reflect.Value) bool {
+	switch val.Kind() {
+	case reflect.Slice:
+		typ := reflect.TypeOf(val.Interface())
+		elemTyp := typ.Elem()
+		switch elemTyp.Kind() {
+		case reflect.Struct, reflect.Map, reflect.Array, reflect.Chan, reflect.Func:
+			return false
+		}
+		return true
+	}
+	return false
 }
 
-func setStringToNumber(from, to reflect.Value) {
+func setNumberToString(from, to reflect.Value) (bool, error) {
+	val := fmt.Sprintf("%v", from.Interface())
+	to.SetString(val)
+	return true, nil
+}
+
+func setStringToNumber(from, to reflect.Value) (bool, error) {
 	val := fmt.Sprintf("%v", from.Interface())
 	if isInteger(to) {
 		valInt64, _ := strconv.ParseInt(val, 10, 64)
@@ -925,10 +951,47 @@ func setStringToNumber(from, to reflect.Value) {
 			to.SetInt(valInt64)
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			to.SetUint(valUint64)
+		default:
 		}
 	} else if isFloat(to) {
 		val64, _ := strconv.ParseFloat(val, 64)
 		to.SetFloat(val64)
 	}
+	return true, nil
+}
+
+func copyBaseSlice(from, to reflect.Value) (bool, error) {
+	if isStringOrIntSlice(from) && isStringOrIntSlice(to) {
+		if to.IsNil() {
+			to.Set(reflect.MakeSlice(to.Type(), 0, 0)) //make slice for storage
+		}
+		var toElemVal reflect.Value
+		var toElemTyp reflect.Type
+
+		toElemTyp = to.Type().Elem()
+		for i := 0; i < from.Len(); i++ {
+			var fromElemVal reflect.Value
+			fromElemVal = from.Index(i)
+			if toElemTyp.Kind() == reflect.Ptr {
+				toElemVal = reflect.New(toElemTyp.Elem())
+			} else {
+				toElemVal = reflect.New(toElemTyp).Elem()
+			}
+			if isString(fromElemVal) && isNumber(toElemVal) {
+				_, err := setStringToNumber(fromElemVal, toElemVal)
+				if err != nil {
+					return false, err
+				}
+			} else if isNumber(fromElemVal) && isString(toElemVal) {
+				_, err := setNumberToString(fromElemVal, toElemVal)
+				if err != nil {
+					return false, err
+				}
+			}
+			to.Set(reflect.Append(to, toElemVal))
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
