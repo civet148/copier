@@ -122,6 +122,24 @@ func CopyWithOption(toValue interface{}, fromValue interface{}, opt Option) (err
 }
 
 func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) {
+	typ := reflect.TypeOf(toValue)
+	if typ.Kind() == reflect.Ptr { //struct pointer address (&*Struct)
+		typ = typ.Elem()
+		val := reflect.ValueOf(toValue).Elem()
+		switch typ.Kind() {
+		case reflect.Ptr:
+			{
+				if typ.Elem().Kind() == reflect.Struct {
+					if val.IsNil() {
+						var typNew = typ.Elem()
+						var valNew = reflect.New(typNew)
+						val.Set(valNew)
+					}
+				}
+			}
+		}
+	}
+
 	var (
 		isSlice    bool
 		amount     = 1
@@ -134,7 +152,6 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 	if !to.CanAddr() {
 		return ErrInvalidCopyDestination
 	}
-
 	// Return is from value is invalid
 	if !from.IsValid() {
 		return ErrInvalidCopyFrom
@@ -994,4 +1011,3 @@ func copyBaseSlice(from, to reflect.Value) (bool, error) {
 	}
 	return false, nil
 }
-
