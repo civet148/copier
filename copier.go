@@ -943,8 +943,11 @@ func isStringOrIntSlice(val reflect.Value) bool {
 	case reflect.Slice:
 		typ := reflect.TypeOf(val.Interface())
 		elemTyp := typ.Elem()
+		if elemTyp.Kind() == reflect.Ptr {
+			elemTyp = elemTyp.Elem()
+		}
 		switch elemTyp.Kind() {
-		case reflect.Struct, reflect.Map, reflect.Array, reflect.Chan, reflect.Func:
+		case reflect.Struct, reflect.Map, reflect.Array, reflect.Chan, reflect.Func, reflect.Ptr, reflect.Slice:
 			return false
 		}
 		return true
