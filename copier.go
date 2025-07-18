@@ -116,6 +116,28 @@ func Copy(toValue interface{}, fromValue interface{}) (err error) {
 	return copier(toValue, fromValue, Option{})
 }
 
+// CopyCase copy things with case sensitive
+func CopyCase(toValue interface{}, fromValue interface{}) (err error) {
+	return copier(toValue, fromValue, Option{
+		CaseSensitive: true,
+	})
+}
+
+// CopyDeep copy things with deep copy
+func CopyDeep(toValue interface{}, fromValue interface{}) (err error) {
+	return copier(toValue, fromValue, Option{
+		DeepCopy: true,
+	})
+}
+
+// CopyCaseDeep copy things with case sensitive and deep copy
+func CopyCaseDeep(toValue interface{}, fromValue interface{}) (err error) {
+	return copier(toValue, fromValue, Option{
+		DeepCopy:      true,
+		CaseSensitive: true,
+	})
+}
+
 // CopyWithOption copy with option
 func CopyWithOption(toValue interface{}, fromValue interface{}, opt Option) (err error) {
 	return copier(toValue, fromValue, opt)
