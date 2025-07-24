@@ -921,8 +921,15 @@ func fieldByName(v reflect.Value, name string, caseSensitive bool) reflect.Value
 	if caseSensitive {
 		return v.FieldByName(name)
 	}
-
-	return v.FieldByNameFunc(func(n string) bool { return strings.EqualFold(n, name) })
+	return v.FieldByNameFunc(func(n string) bool {
+		if len(n) != 0 {
+			c := rune(n[0])
+			if !unicode.IsUpper(c) {
+				return false //exclude unexported fields
+			}
+		}
+		return strings.EqualFold(n, name)
+	})
 }
 
 func isNumber(val reflect.Value) bool {
