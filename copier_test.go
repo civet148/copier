@@ -1774,3 +1774,35 @@ func TestNestedNilPointerStruct(t *testing.T) {
 		t.Errorf("to (%v) value should equal from (%v) value", to.Title, from.Title)
 	}
 }
+
+type UserRegister struct {
+	UserId       uint64
+	RegisterTime time.Time
+	DeletedTime  *time.Time
+}
+
+type UserRegisterPb struct {
+	UserId       uint64
+	RegisterTime int64
+	DeletedTime  string
+}
+
+func TestTimeToNumberOrString(t *testing.T) {
+	var t64 = int64(1768473438)
+	var tm = time.Unix(t64, 0)
+	var dt = time.Unix(t64+1000, 0)
+	var from = UserRegister{
+		UserId:       1,
+		RegisterTime: tm,
+		DeletedTime:  &dt,
+	}
+	var to *UserRegisterPb
+	err := copier.Copy(&to, &from, copier.WithTimeLayout(time.RFC3339))
+	if err != nil {
+		t.Error("should not error")
+	}
+	if to.RegisterTime != t64 || to.DeletedTime == "" {
+		t.Errorf("to time (%v) value should equal from time (%v) value", to.RegisterTime, t64)
+	}
+	t.Logf("from  [%+v] to [%+v]", from, to)
+}

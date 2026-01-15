@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
 
@@ -48,6 +49,7 @@ type Option struct {
 	// Custom field name mappings to copy values with different names in `fromValue` and `toValue` types.
 	// Examples can be found in `copier_field_name_mapping_test.go`.
 	FieldNameMapping []FieldNameMapping
+	TimeLayout       string //time string layout
 }
 
 func (opt Option) converters() map[converterPair]TypeConverter {
@@ -111,9 +113,51 @@ type tagNameMapping struct {
 	TagToFieldName map[string]string
 }
 
+type OptionFunc func(opt *Option)
+
+func WithTimeLayout(layout string) OptionFunc {
+	return func(opt *Option) {
+		opt.TimeLayout = layout
+	}
+}
+
+func WithDeepCopy() OptionFunc {
+	return func(opt *Option) {
+		opt.DeepCopy = true
+	}
+}
+
+func WithCaseSensitive() OptionFunc {
+	return func(opt *Option) {
+		opt.CaseSensitive = true
+	}
+}
+
+func WithConverters(converters []TypeConverter) OptionFunc {
+	return func(opt *Option) {
+		opt.Converters = converters
+	}
+}
+
+func WithFieldNameMapping(fieldNameMapping []FieldNameMapping) OptionFunc {
+	return func(opt *Option) {
+		opt.FieldNameMapping = fieldNameMapping
+	}
+}
+
+func WithIgnoreEmpty() OptionFunc {
+	return func(opt *Option) {
+		opt.IgnoreEmpty = true
+	}
+}
+
 // Copy copy things
-func Copy(toValue interface{}, fromValue interface{}) (err error) {
-	return copier(toValue, fromValue, Option{})
+func Copy(toValue interface{}, fromValue interface{}, options ...OptionFunc) (err error) {
+	var opt = Option{}
+	for _, o := range options {
+		o(&opt)
+	}
+	return copier(toValue, fromValue, opt)
 }
 
 // CopyCase copy things with case sensitive
@@ -218,7 +262,7 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 
 		for _, k := range from.MapKeys() {
 			toKey := indirect(reflect.New(toType.Key()))
-			isSet, err := set(toKey, k, opt.DeepCopy, converters)
+			isSet, err := set(toKey, k, opt)
 			if err != nil {
 				return err
 			}
@@ -231,7 +275,7 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 				elemType, _ = indirectType(elemType)
 			}
 			toValue := indirect(reflect.New(elemType))
-			isSet, err = set(toValue, from.MapIndex(k), opt.DeepCopy, converters)
+			isSet, err = set(toValue, from.MapIndex(k), opt)
 			if err != nil {
 				return err
 			}
@@ -268,7 +312,7 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 				if to.Len() < i+1 {
 					to.Set(reflect.Append(to, reflect.New(to.Type().Elem()).Elem()))
 				}
-				isSet, err := set(to.Index(i), from.Index(i), opt.DeepCopy, converters)
+				isSet, err := set(to.Index(i), from.Index(i), opt)
 				if err != nil {
 					return err
 				}
@@ -300,7 +344,7 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 	}
 
 	if len(converters) > 0 {
-		if ok, e := set(to, from, opt.DeepCopy, converters); e == nil && ok {
+		if ok, e := set(to, from, opt); e == nil && ok {
 			// converter supported
 			return
 		}
@@ -331,7 +375,7 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 		}
 
 		if len(converters) > 0 {
-			if ok, e := set(dest, source, opt.DeepCopy, converters); e == nil && ok {
+			if ok, e := set(dest, source, opt); e == nil && ok {
 				if isSlice {
 					// FIXME: maybe should check the other types?
 					if to.Type().Elem().Kind() == reflect.Ptr {
@@ -418,7 +462,7 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 					toField := fieldByName(dest, destFieldName, opt.CaseSensitive)
 					if toField.IsValid() {
 						if toField.CanSet() {
-							isSet, err := set(toField, fromField, opt.DeepCopy, converters)
+							isSet, err := set(toField, fromField, opt)
 							if err != nil {
 								return err
 							}
@@ -464,7 +508,7 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 					if toField := fieldByName(dest, destFieldName, opt.CaseSensitive); toField.IsValid() && toField.CanSet() {
 						values := fromMethod.Call([]reflect.Value{})
 						if len(values) >= 1 {
-							set(toField, values[0], opt.DeepCopy, converters)
+							set(toField, values[0], opt)
 						}
 					}
 				}
@@ -476,7 +520,7 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 				if to.Len() < i+1 {
 					to.Set(reflect.Append(to, dest.Addr()))
 				} else {
-					isSet, err := set(to.Index(i), dest.Addr(), opt.DeepCopy, converters)
+					isSet, err := set(to.Index(i), dest.Addr(), opt)
 					if err != nil {
 						return err
 					}
@@ -492,7 +536,7 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 				if to.Len() < i+1 {
 					to.Set(reflect.Append(to, dest))
 				} else {
-					isSet, err := set(to.Index(i), dest, opt.DeepCopy, converters)
+					isSet, err := set(to.Index(i), dest, opt)
 					if err != nil {
 						return err
 					}
@@ -613,7 +657,9 @@ func indirectType(reflectType reflect.Type) (_ reflect.Type, isPtr bool) {
 	return reflectType, isPtr
 }
 
-func set(to, from reflect.Value, deepCopy bool, converters map[converterPair]TypeConverter) (bool, error) {
+func set(to, from reflect.Value, opt Option) (bool, error) {
+	deepCopy := opt.DeepCopy
+	converters := opt.converters()
 	if !from.IsValid() {
 		return true, nil
 	}
@@ -683,6 +729,8 @@ func set(to, from reflect.Value, deepCopy bool, converters map[converterPair]Typ
 			return setStringToNumber(from, to)
 		} else if isNumber(from) && isString(to) {
 			return setNumberToString(from, to)
+		} else if isTime(from) && (isNumber(to) || isString(to)) {
+			return setTimeToNumberOrString(from, to, opt)
 		} else {
 			ok, _ := copyBaseSlice(from, to)
 			if ok {
@@ -738,7 +786,7 @@ func set(to, from reflect.Value, deepCopy bool, converters map[converterPair]Typ
 
 	// from is ptr
 	if from.Kind() == reflect.Ptr {
-		return set(to, from.Elem(), deepCopy, converters)
+		return set(to, from.Elem(), opt)
 	}
 
 	return false, nil
@@ -984,9 +1032,41 @@ func isStringOrIntSlice(val reflect.Value) bool {
 	return false
 }
 
+func isTime(val reflect.Value) bool {
+	// 检查值是否有效且可导出
+	if !val.IsValid() || !val.CanInterface() {
+		return false
+	}
+	// 尝试类型断言
+	_, ok := val.Interface().(time.Time)
+	return ok
+}
+
 func setNumberToString(from, to reflect.Value) (bool, error) {
 	val := fmt.Sprintf("%v", from.Interface())
 	to.SetString(val)
+	return true, nil
+}
+
+func setTimeToNumberOrString(from, to reflect.Value, opt Option) (bool, error) {
+	var t = from.Interface().(time.Time)
+	val := t.Unix()
+	if isInteger(to) {
+		switch to.Kind() {
+		case reflect.Int32, reflect.Int64:
+			to.SetInt(val)
+		case reflect.Uint32, reflect.Uint64:
+			to.SetUint(uint64(val))
+		}
+	} else if isString(to) {
+		if opt.TimeLayout != "" {
+			to.SetString(t.Format(opt.TimeLayout))
+		} else {
+			to.SetString(t.Format(time.DateTime))
+		}
+	} else {
+		return false, nil
+	}
 	return true, nil
 }
 
