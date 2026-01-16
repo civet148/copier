@@ -731,6 +731,8 @@ func set(to, from reflect.Value, opt Option) (bool, error) {
 			return setNumberToString(from, to)
 		} else if isTime(from) && (isNumber(to) || isString(to)) {
 			return setTimeToNumberOrString(from, to, opt)
+		} else if (isNumber(from) || isString(from)) && isTime(to) {
+			return setNumberOrStringToTime(from, to, opt)
 		} else {
 			ok, _ := copyBaseSlice(from, to)
 			if ok {
@@ -1053,7 +1055,7 @@ func setTimeToNumberOrString(from, to reflect.Value, opt Option) (bool, error) {
 	val := t.Unix()
 	if isInteger(to) {
 		switch to.Kind() {
-		case reflect.Int32, reflect.Int64:
+		case reflect.Int, reflect.Int32, reflect.Int64:
 			to.SetInt(val)
 		case reflect.Uint32, reflect.Uint64:
 			to.SetUint(uint64(val))
@@ -1066,6 +1068,43 @@ func setTimeToNumberOrString(from, to reflect.Value, opt Option) (bool, error) {
 		}
 	} else {
 		return false, nil
+	}
+	return true, nil
+}
+
+func setNumberOrStringToTime(from, to reflect.Value, opt Option) (bool, error) {
+
+	var val64 int64
+	if isInteger(from) {
+		val := from.Interface()
+		switch from.Kind() {
+		case reflect.Int:
+			val64 = int64(val.(int))
+		case reflect.Int32:
+			val64 = int64(val.(int32))
+		case reflect.Int64:
+			val64 = val.(int64)
+		case reflect.Uint:
+			val64 = int64(val.(uint))
+		case reflect.Uint32:
+			val64 = int64(val.(uint32))
+		case reflect.Uint64:
+			val64 = int64(val.(uint64))
+		}
+	} else if isString(from) {
+		var layout = opt.TimeLayout
+		if layout == "" {
+			layout = time.DateTime
+		}
+		tm, err := time.ParseInLocation(layout, from.String(), time.Local)
+		if err != nil {
+			return false, nil
+		}
+		val64 = tm.Unix()
+	}
+	if t, ok := to.Interface().(time.Time); ok {
+		t = time.Unix(val64, 0)
+		to.Set(reflect.ValueOf(t))
 	}
 	return true, nil
 }

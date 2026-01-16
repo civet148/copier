@@ -1779,12 +1779,14 @@ type UserRegister struct {
 	UserId       uint64
 	RegisterTime time.Time
 	DeletedTime  *time.Time
+	UpdateAt     int64
 }
 
 type UserRegisterPb struct {
 	UserId       uint64
 	RegisterTime int64
 	DeletedTime  string
+	UpdateAt     *time.Time
 }
 
 func TestTimeToNumberOrString(t *testing.T) {
@@ -1795,9 +1797,10 @@ func TestTimeToNumberOrString(t *testing.T) {
 		UserId:       1,
 		RegisterTime: tm,
 		DeletedTime:  &dt,
+		UpdateAt:     t64,
 	}
 	var to *UserRegisterPb
-	err := copier.Copy(&to, &from, copier.WithTimeLayout(time.RFC3339))
+	err := copier.Copy(&to, &from, copier.WithTimeLayout(time.DateTime))
 	if err != nil {
 		t.Error("should not error")
 	}
