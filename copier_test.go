@@ -1775,37 +1775,69 @@ func TestNestedNilPointerStruct(t *testing.T) {
 	}
 }
 
-type UserRegister struct {
+type UserFrom struct {
 	UserId       uint64
 	RegisterTime time.Time
 	DeletedTime  *time.Time
-	UpdateAt     int64
+	CreatedAt    int64
+	UpdatedAt    int64
+	LoginAt      time.Time
+	ActiveAt     string
 }
 
-type UserRegisterPb struct {
+type UserTo struct {
 	UserId       uint64
-	RegisterTime int64
+	RegisterTime *time.Time
 	DeletedTime  string
-	UpdateAt     *time.Time
+	CreatedAt    *time.Time
+	UpdatedAt    *time.Time
+	LoginAt      int64
+	ActiveAt     *time.Time
 }
 
 func TestTimeToNumberOrString(t *testing.T) {
 	var t64 = int64(1768473438)
 	var tm = time.Unix(t64, 0)
 	var dt = time.Unix(t64+1000, 0)
-	var from = UserRegister{
+	var from = UserFrom{
 		UserId:       1,
 		RegisterTime: tm,
 		DeletedTime:  &dt,
-		UpdateAt:     t64,
+		CreatedAt:    0,
+		UpdatedAt:    t64,
+		LoginAt:      tm,
+		ActiveAt:     "",
 	}
-	var to *UserRegisterPb
-	err := copier.Copy(&to, &from, copier.WithTimeLayout(time.DateTime))
+	var to *UserTo
+	err := copier.Copy(&to, &from, copier.WithTimeLayout(time.DateTime), copier.WithKeepTimeNull())
 	if err != nil {
 		t.Error("should not error")
+		return
 	}
-	if to.RegisterTime != t64 || to.DeletedTime == "" {
-		t.Errorf("to time (%v) value should equal from time (%v) value", to.RegisterTime, t64)
+	if to.RegisterTime == nil {
+		t.Errorf("to RegisterTime (%v) value should equal from RegisterTime (%v) value", to.RegisterTime, t64)
+		return
 	}
-	t.Logf("from  [%+v] to [%+v]", from, to)
+	if to.DeletedTime == "" {
+		t.Errorf("to DeletedTime (%v) value should equal from DeletedTime (%v) value", to.DeletedTime, from.DeletedTime)
+		return
+	}
+	if to.CreatedAt != nil {
+		t.Errorf("to CreatedAt (%v) value should be nil", to.CreatedAt)
+		return
+	}
+	if to.UpdatedAt == nil {
+		t.Errorf("to UpdatedAt (%v) value should not be nil", to.UpdatedAt)
+		return
+	}
+	if to.LoginAt == 0 {
+		t.Errorf("to LoginAt (%v) value should not be 0", to.LoginAt)
+		return
+	}
+	if to.ActiveAt != nil {
+		t.Errorf("to ActiveAt (%v) value should be nil", to.ActiveAt)
+		return
+	}
+	t.Logf("from  [%+v]", from)
+	t.Logf("to [%+v]", to)
 }

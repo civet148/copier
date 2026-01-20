@@ -50,6 +50,7 @@ type Option struct {
 	// Examples can be found in `copier_field_name_mapping_test.go`.
 	FieldNameMapping []FieldNameMapping
 	TimeLayout       string //time string layout
+	KeepTimeNull     bool   //keep *time.Time nil while converting from 0 or ""
 }
 
 func (opt Option) converters() map[converterPair]TypeConverter {
@@ -118,6 +119,12 @@ type OptionFunc func(opt *Option)
 func WithTimeLayout(layout string) OptionFunc {
 	return func(opt *Option) {
 		opt.TimeLayout = layout
+	}
+}
+
+func WithKeepTimeNull() OptionFunc {
+	return func(opt *Option) {
+		opt.KeepTimeNull = true
 	}
 }
 
@@ -688,6 +695,17 @@ func set(to, from reflect.Value, opt Option) (bool, error) {
 				}
 			}
 			// allocate new `to` variable with default value (eg. *string -> new(string))
+			if isPtrTimeType(to.Type()) {
+				if from.CanInt() {
+					if opt.KeepTimeNull && from.Int() == 0 {
+						return true, nil
+					}
+				} else if from.CanInterface() {
+					if opt.KeepTimeNull && fmt.Sprintf("%v", from.Interface()) == "" {
+						return true, nil
+					}
+				}
+			}
 			to.Set(reflect.New(to.Type().Elem()))
 		} else if from.Kind() != reflect.Ptr && from.IsZero() {
 			to.Set(reflect.Zero(to.Type()))
@@ -1161,4 +1179,17 @@ func copyBaseSlice(from, to reflect.Value) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func isPtrTimeType(t reflect.Type) bool {
+	// 检查是否为指针类型
+	if t.Kind() != reflect.Ptr {
+		return false
+	}
+
+	// 获取指针指向的类型
+	elemType := t.Elem()
+
+	// 检查指向的类型是否为 time.Time
+	return elemType == reflect.TypeOf(time.Time{})
 }
