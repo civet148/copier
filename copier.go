@@ -50,7 +50,6 @@ type Option struct {
 	// Examples can be found in `copier_field_name_mapping_test.go`.
 	FieldNameMapping []FieldNameMapping
 	TimeLayout       string //time string layout
-	KeepTimeNull     bool   //keep *time.Time nil while converting from 0 or ""
 }
 
 func (opt Option) converters() map[converterPair]TypeConverter {
@@ -119,12 +118,6 @@ type OptionFunc func(opt *Option)
 func WithTimeLayout(layout string) OptionFunc {
 	return func(opt *Option) {
 		opt.TimeLayout = layout
-	}
-}
-
-func WithKeepTimeNull() OptionFunc {
-	return func(opt *Option) {
-		opt.KeepTimeNull = true
 	}
 }
 
@@ -697,11 +690,12 @@ func set(to, from reflect.Value, opt Option) (bool, error) {
 			// allocate new `to` variable with default value (eg. *string -> new(string))
 			if isPtrTimeType(to.Type()) {
 				if from.CanInt() {
-					if opt.KeepTimeNull && from.Int() == 0 {
+					if from.Int() == 0 {
 						return true, nil
 					}
 				} else if from.CanInterface() {
-					if opt.KeepTimeNull && fmt.Sprintf("%v", from.Interface()) == "" {
+					var strValue = fmt.Sprintf("%v", from.Interface())
+					if strings.TrimSpace(strValue) == "" {
 						return true, nil
 					}
 				}

@@ -1809,7 +1809,7 @@ func TestTimeToNumberOrString(t *testing.T) {
 		ActiveAt:     "",
 	}
 	var to *UserTo
-	err := copier.Copy(&to, &from, copier.WithTimeLayout(time.DateTime), copier.WithKeepTimeNull())
+	err := copier.Copy(&to, &from, copier.WithTimeLayout(time.DateTime))
 	if err != nil {
 		t.Error("should not error")
 		return
